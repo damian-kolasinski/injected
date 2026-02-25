@@ -1,56 +1,62 @@
 /// A property wrapper that resolves a dependency from ``DependencyContainer/shared``.
 ///
-/// ## Default behaviour (lazy resolution)
+/// ## Lazy resolution (default)
 ///
 /// The dependency is resolved on first access of `wrappedValue`, not at init time.
 /// This means the dependency does not need to be registered yet when the owning object is created.
 ///
 /// ```swift
 /// class ProfileViewModel {
-///     @Injected var analytics: AnalyticsProviding
+///     @Injected(resolve: .lazy) var analytics: AnalyticsProviding
 /// }
 /// ```
 ///
-/// ## Eager resolution (`INJECTED_EAGER_RESOLVE`)
+/// ## Eager resolution
 ///
-/// When the `INJECTED_EAGER_RESOLVE` Active Compilation Condition is set, the dependency is resolved
-/// immediately in `init`. This is useful for tests — a missing registration crashes at construction
-/// time rather than deep inside a call chain.
+/// The dependency is resolved immediately at init time. A missing registration crashes
+/// at construction time rather than deep in a Combine chain or async call — useful for tests.
+///
+/// ```swift
+/// class ProfileViewModel {
+///     @Injected(resolve: .eager) var analytics: AnalyticsProviding
+/// }
+/// ```
 ///
 /// ## Explicit key
 ///
 /// ```swift
-/// @Injected("myService") var service: ServiceProtocol
+/// @Injected(resolve: .lazy, key: "myService") var service: ServiceProtocol
 /// ```
 @MainActor
 @propertyWrapper
 public final class Injected<Dependency> {
     deinit {}
 
-    #if INJECTED_EAGER_RESOLVE
-    private let dependency: Dependency
-
-    /// Creates the property wrapper and eagerly resolves the dependency.
-    ///
-    /// - Parameter explicitKey: An optional string key. When `nil`, the type name is used.
-    public init(_ explicitKey: String? = nil) {
-        self.dependency = explicitKey.map {
-            DependencyContainer.shared.resolve(key: $0)
-        } ?? DependencyContainer.shared.resolve()
+    /// Controls when the dependency is resolved from the container.
+    public enum ResolveStrategy {
+        /// Resolve immediately at init time.
+        case eager
+        /// Defer resolution until first access of `wrappedValue`.
+        case lazy
     }
 
-    public var wrappedValue: Dependency {
-        dependency
-    }
-    #else
     private var dependency: Dependency?
     private let explicitKey: String?
 
-    /// Creates the property wrapper. Resolution is deferred until first access.
+    /// Creates the property wrapper with the given resolution strategy.
     ///
-    /// - Parameter explicitKey: An optional string key. When `nil`, the type name is used.
-    public init(_ explicitKey: String? = nil) {
-        self.explicitKey = explicitKey
+    /// - Parameters:
+    ///   - strategy: Whether to resolve eagerly (at init) or lazily (on first access).
+    ///   - key: An optional string key. When `nil`, the type name is used.
+    public init(resolve strategy: ResolveStrategy, key: String? = nil) {
+        self.explicitKey = key
+
+        if case .eager = strategy {
+            let resolved: Dependency = key.map {
+                DependencyContainer.shared.resolve(key: $0)
+            } ?? DependencyContainer.shared.resolve()
+            self.dependency = resolved
+        }
     }
 
     public var wrappedValue: Dependency {
@@ -63,5 +69,4 @@ public final class Injected<Dependency> {
         dependency = value
         return value
     }
-    #endif
 }

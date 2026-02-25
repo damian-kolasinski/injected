@@ -24,7 +24,7 @@ DependencyContainer.shared.register(.lazy { NetworkService() })
 
 // Inject
 class ProfileViewModel {
-    @Injected var network: NetworkService
+    @Injected(resolve: .lazy) var network: NetworkService
 }
 ```
 
@@ -68,7 +68,7 @@ Register a concrete type under a protocol so consumers depend on the abstraction
 container.register(.eager(RealService()), for: ServiceProtocol.self)
 
 class ViewModel {
-    @Injected var service: ServiceProtocol
+    @Injected(resolve: .lazy) var service: ServiceProtocol
 }
 ```
 
@@ -89,34 +89,62 @@ func viewModelUsesMock() async {
 }
 ```
 
+## Wrapping `@Injected` in Your App
+
+`@Injected` requires an explicit `ResolveStrategy` so each call site declares its intent. In practice you'll want a single policy for your entire app. The recommended approach is a thin wrapper that encodes that policy:
+
+```swift
+@MainActor
+@propertyWrapper
+final class Dependency<T> {
+    private let injected: Injected<T>
+
+    init(key: String? = nil) {
+        self.injected = Injected(resolve: AppEnvironment.isTest ? .eager : .lazy, key: key)
+    }
+
+    var wrappedValue: T {
+        injected.wrappedValue
+    }
+}
+```
+
+Now your feature code uses `@Dependency` with no strategy argument, and the resolution policy is defined in one place:
+
+```swift
+class ProfileViewModel {
+    @Dependency var analytics: AnalyticsProviding
+}
+```
+
 ## Design Decisions
+
+### Why a required `ResolveStrategy` parameter
+
+Production code benefits from lazy resolution (zero-cost init, resolve on first access). Tests benefit from eager resolution — a missing registration crashes at construction time rather than deep in a Combine chain or async call.
+
+Rather than hiding this choice behind a compilation flag or global setting, `@Injected` makes it an explicit init parameter. This keeps the library simple and portable (no SPM flag propagation issues), and lets each app define its own resolution policy via a wrapper property wrapper.
 
 ### Why `@MainActor`
 
 DI resolution happens during object initialisation and property access — main-thread work in iOS/macOS apps. `@MainActor` eliminates all synchronisation overhead (no locks, no atomics). The container itself is near-zero overhead: a dictionary lookup + switch branch — nanoseconds. The dominant cost is always the dependency itself, not the container. `@MainActor` ensures this stays true by avoiding any locking mechanism.
 
-If a dependency is needed off the main actor, capture it in a local variable first:
+If a dependency needs to perform heavy work, offload it inside the service using `@concurrent`:
 
 ```swift
-let service = viewModel.service // on MainActor
-Task.detached {
-    await service.doWork() // safe — captured before leaving MainActor
+protocol ImageProcessing {
+    func process(_ image: UIImage) async -> UIImage
+}
+
+final class ImageProcessor: ImageProcessing {
+    @concurrent
+    func process(_ image: UIImage) async -> UIImage {
+        applyFilters(to: image) // runs on the global executor
+    }
 }
 ```
 
-### Why `#if INJECTED_EAGER_RESOLVE`
-
-Production uses lazy resolution (zero-cost init, `if let` on access). Tests benefit from eager resolution — a missing registration crashes at construction time rather than deep in a Combine chain or async call.
-
-## Configuration
-
-### Xcode / Tuist
-
-Add `INJECTED_EAGER_RESOLVE` to **Active Compilation Conditions** on the *Injected* framework target's test build configuration (or the test target that imports it).
-
-### SPM
-
-The lazy path is always active when building with SPM. Tests still work — failures simply appear on first property access instead of at init time.
+The service is resolved on `@MainActor`, but `@concurrent` methods automatically run on the global executor. Callers stay simple — the concurrency boundary lives in the implementation, not at the injection site.
 
 ## Releasing
 

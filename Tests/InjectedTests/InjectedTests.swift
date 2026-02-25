@@ -52,6 +52,32 @@ struct InjectedTests {
         _ = holder.service
         #expect(factoryCalled)
     }
+
+    @Test("Eager resolution — dependency resolved at init")
+    func eagerResolution() {
+        var factoryCalled = false
+        DependencyContainer.shared.register(.volatile {
+            factoryCalled = true
+            return MockService(label: "eager")
+        })
+
+        let holder = EagerHolder()
+        #expect(factoryCalled)
+        #expect(holder.service.label == "eager")
+    }
+
+    @Test("Eager resolution with explicit key")
+    func eagerResolutionWithExplicitKey() {
+        var factoryCalled = false
+        DependencyContainer.shared.register(.volatile {
+            factoryCalled = true
+            return MockService(label: "keyed-eager")
+        }, for: "myKey")
+
+        let holder = EagerKeyedHolder()
+        #expect(factoryCalled)
+        #expect(holder.service.label == "keyed-eager")
+    }
 }
 
 // MARK: - Test Doubles
@@ -66,10 +92,20 @@ private final class MockService {
 
 @MainActor
 private final class Holder {
-    @Injected var service: MockService
+    @Injected(resolve: .lazy) var service: MockService
+}
+
+@MainActor
+private final class EagerHolder {
+    @Injected(resolve: .eager) var service: MockService
 }
 
 @MainActor
 private final class KeyedHolder {
-    @Injected("myKey") var service: MockService
+    @Injected(resolve: .lazy, key: "myKey") var service: MockService
+}
+
+@MainActor
+private final class EagerKeyedHolder {
+    @Injected(resolve: .eager, key: "myKey") var service: MockService
 }
