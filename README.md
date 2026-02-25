@@ -118,6 +118,14 @@ Add `INJECTED_EAGER_RESOLVE` to **Active Compilation Conditions** on the *Inject
 
 The lazy path is always active when building with SPM. Tests still work — failures simply appear on first property access instead of at init time.
 
+## Releasing
+
+Push a semver tag to create a GitHub Release with auto-generated notes:
+
+```bash
+git tag 1.x.x && git push --tags
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
