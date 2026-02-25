@@ -23,5 +23,10 @@ let package = Package(
             name: "InjectedTests",
             dependencies: ["Injected"]
         ),
+        .executableTarget(
+            name: "Example",
+            dependencies: ["Injected"],
+            path: "Examples"
+        ),
     ]
 )

@@ -117,6 +117,22 @@ class ProfileViewModel {
 }
 ```
 
+## Modular Architecture
+
+A service locator shines in modular codebases where each feature lives in its own target or framework. Every module splits into two parts: an **Interface target** (protocols and public models only) and an **Implementation target** (concrete types). Other modules depend only on Interface targets, so the dependency graph stays acyclic and each module compiles in isolation.
+
+Each module's implementation provides a `register()` function that wires its concrete types to its Interface protocols. The main app — the only place that imports every module — calls each `register()` at launch in bottom-up order (foundation modules first, features second). From that point on, any type in any module can `@Inject` a protocol from another module's Interface without knowing or importing the implementation behind it.
+
+This gives you compile-time boundaries between modules, runtime flexibility through the container, and straightforward testing — swap the container with `$shared.withValue(...)` and each module's internals can be tested against mocks without importing a single concrete type from another module.
+
+## Example
+
+A runnable example covering registration strategies, protocol-based injection, and the `@Dependency` wrapper pattern is in [`Examples/Example.swift`](Examples/Example.swift). Build and run it with:
+
+```bash
+swift run Example
+```
+
 ## Design Decisions
 
 ### Why a required `ResolveStrategy` parameter

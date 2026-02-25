@@ -63,12 +63,12 @@ public final class DependencyContainer {
             private let makeDependency: () -> T
 
             /// Creates storage backed by the given factory.
-            public init(makeDependency: @escaping () -> T) {
+            init(makeDependency: @escaping () -> T) {
                 self.makeDependency = makeDependency
             }
 
             /// Returns the cached instance, creating it on first call.
-            public func get() -> T {
+            func get() -> T {
                 if let existing = dep {
                     return existing
                 }
