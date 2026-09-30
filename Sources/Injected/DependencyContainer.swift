@@ -28,7 +28,7 @@ public final class DependencyContainer {
     public static var shared = DependencyContainer()
 
     /// Creates an empty container.
-    public init() {}
+    public nonisolated init() {}
 
     // MARK: - Registration
 
